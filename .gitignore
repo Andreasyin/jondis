@@ -1,5 +1,7 @@
 *.pyc
 .idea/
 .noseids
+.env
+dist/
 dump.rdb
 jondis.egg-info/

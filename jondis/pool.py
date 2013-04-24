@@ -32,16 +32,23 @@ class Pool(object):
         self._slave_pool = set()
         self._created_connections = 0
 
+        db = None
         for x in hosts:
             if ":" in x:
                 (host, port) = x.split(":")
+                if "/" in port:
+                    port, db = port.split("/")
+                else:
+                    db = 0
 
             else:
                 host = x
                 port = 6379
+                db = 0
             host = socket.gethostbyname(host)
             self._hosts.add(Server(host, int(port)))
 
+        self.connection_kwargs['db'] = db or 0
         self._configure()
 
     def _configure(self):
