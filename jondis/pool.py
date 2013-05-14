@@ -8,8 +8,6 @@ from collections import namedtuple
 import logging
 import socket
 
-logger = logging.getLogger(__name__)
-
 Server = namedtuple('Server', ['host', 'port'])
 
 
@@ -25,8 +23,8 @@ class Pool(object):
         self.max_connections = max_connections or 2 ** 31
         self._in_use_connections = set()
 
-        self._hosts = set() # current active known hosts
-        self._current_master = None # (host,port)
+        self._hosts = set()  # current active known hosts
+        self._current_master = None  # (host,port)
 
         self._master_pool = set()
         self._slave_pool = set()
@@ -52,7 +50,7 @@ class Pool(object):
         given the servers we know about, find the current master
         once we have the master, find all the slaves
         """
-        logger.debug("Running configure")
+        logging.debug("Running configure")
         to_check = Queue()
         for x in self._hosts:
             to_check.put(x)
@@ -61,7 +59,8 @@ class Pool(object):
             x = to_check.get()
 
             try:
-                conn = self.connection_class(host=x.host, port=x.port, **self.connection_kwargs)
+                conn = self.connection_class(
+                    host=x.host, port=x.port, **self.connection_kwargs)
                 conn.send_command("INFO")
                 info = parse_info(conn.read_response())
 
@@ -69,13 +68,14 @@ class Pool(object):
                     self._slave_pool.add(conn)
                 elif info['role'] == 'master':
                     self._current_master = x
-                    logger.debug("Current master {}:{}".format(x.host, x.port))
+                    logging.debug("Current master {}:{}".format(
+                        x.host, x.port))
                     self._master_pool.add(conn)
                     slaves = filter(lambda x: x[0:5] == 'slave', info.keys())
                     slaves = [info[y] for y in slaves]
                     slaves = [y.split(',') for y in slaves]
                     slaves = filter(lambda x: x[2] == 'online', slaves)
-                    slaves = [Server(x[0], int(x[1])) for x in slaves]
+                    slaves = [Server(s[0], int(s[1])) for s in slaves]
 
                     for y in slaves:
                         if y not in self._hosts:
@@ -85,9 +85,9 @@ class Pool(object):
                     # add the slaves
             except:
                 # remove from list
+                logging.error("Can't connect to: {host}:{port}/{db}".format(host=x.host, port=x.port, db=self.connection_kwargs.get('db')), exc_info=1)
                 to_remove = []
-        logger.debug("Configure complete, host list: {}".format(self._hosts))
-
+        logging.debug("Configure complete, host list: {}".format(self._hosts))
 
     def _checkpid(self):
         if self.pid != os.getpid():
@@ -100,9 +100,9 @@ class Pool(object):
         self._checkpid()
         try:
             connection = self._master_pool.pop()
-            logger.debug("Using connection from pool")
+            logging.debug("Using connection from pool")
         except KeyError:
-            logger.debug("Creating new connection")
+            logging.debug("Creating new connection")
             connection = self.make_connection()
 
         self._in_use_connections.add(connection)
@@ -116,13 +116,13 @@ class Pool(object):
         self._created_connections += 1
 
         if self._current_master == None:
-            logger.debug("No master set - reconfiguratin")
+            logging.debug("No master set - reconfiguratin")
             self._configure()
 
         host = self._current_master[0]
         port = self._current_master[1]
 
-        logger.debug("Creating new connection to {}:{}".format(host, port))
+        logging.debug("Creating new connection to {}:{}".format(host, port))
         return self.connection_class(host=host, port=port, **self.connection_kwargs)
 
     def release(self, connection):
@@ -133,13 +133,13 @@ class Pool(object):
         """
 
         if connection._sock is None:
-            logger.debug("Dead socket, reconfigure")
+            logging.debug("Dead socket, reconfigure")
             self.disconnect()
             self._configure()
             self._current_master = None
             server = Server(connection.host, int(connection.port))
             self._hosts.remove(server)
-            logger.debug("New configuration: {}".format(self._hosts))
+            logging.debug("New configuration: {}".format(self._hosts))
 
             return
 
@@ -153,5 +153,3 @@ class Pool(object):
         self._master_pool = set()
         self._slave_pool = set()
         self._in_use_connections = set()
-
-
