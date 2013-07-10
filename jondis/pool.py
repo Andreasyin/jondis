@@ -116,13 +116,16 @@ class Pool(object):
         self._created_connections += 1
 
         if self._current_master == None:
-            logging.debug("No master set - reconfiguratin")
+            logging.warning("No master set - reconfiguratin")
             self._configure()
+
+        if not self._current_master:
+            raise ConnectionError("Can't connect to a master")
 
         host = self._current_master[0]
         port = self._current_master[1]
 
-        logging.debug("Creating new connection to {}:{}".format(host, port))
+        logging.info("Creating new connection to {}:{}".format(host, port))
         return self.connection_class(host=host, port=port, **self.connection_kwargs)
 
     def release(self, connection):
@@ -133,7 +136,7 @@ class Pool(object):
         """
 
         if connection._sock is None:
-            logging.debug("Dead socket, reconfigure")
+            logging.warning("Dead socket, reconfigure")
             self.disconnect()
             self._configure()
             self._current_master = None
