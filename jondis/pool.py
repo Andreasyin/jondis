@@ -23,10 +23,11 @@ class Pool(object):
         self.connection_class = connection_class
         self.connection_kwargs = connection_kwargs
         self.max_connections = max_connections or 2 ** 31
+        self._hosts_arg = hosts
         self._in_use_connections = set()
 
-        self._hosts = set() # current active known hosts
-        self._current_master = None # (host,port)
+        self._hosts = set()  # current active known hosts
+        self._current_master = None  # (host,port)
 
         self._master_pool = set()
         self._slave_pool = set()
@@ -88,12 +89,11 @@ class Pool(object):
                 to_remove = []
         logger.debug("Configure complete, host list: {}".format(self._hosts))
 
-
     def _checkpid(self):
         if self.pid != os.getpid():
             self.disconnect()
             self.__init__(self.connection_class, self.max_connections,
-                          **self.connection_kwargs)
+                          self._hosts_arg, **self.connection_kwargs)
 
     def get_connection(self, command_name, *keys, **options):
         "Get a connection from the pool"
@@ -153,5 +153,3 @@ class Pool(object):
         self._master_pool = set()
         self._slave_pool = set()
         self._in_use_connections = set()
-
-
