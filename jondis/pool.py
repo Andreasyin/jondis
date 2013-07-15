@@ -21,6 +21,7 @@ class Pool(object):
         self.connection_class = connection_class
         self.connection_kwargs = connection_kwargs
         self.max_connections = max_connections or 2 ** 31
+        self._origin_hosts = hosts
         self._in_use_connections = set()
 
         self._hosts = set()  # current active known hosts
@@ -86,14 +87,13 @@ class Pool(object):
             except:
                 # remove from list
                 logging.error("Can't connect to: {host}:{port}/{db}".format(host=x.host, port=x.port, db=self.connection_kwargs.get('db')), exc_info=1)
-                to_remove = []
         logging.debug("Configure complete, host list: {}".format(self._hosts))
 
     def _checkpid(self):
         if self.pid != os.getpid():
             self.disconnect()
             self.__init__(self.connection_class, self.max_connections,
-                          **self.connection_kwargs)
+                          self._origin_hosts, **self.connection_kwargs)
 
     def get_connection(self, command_name, *keys, **options):
         "Get a connection from the pool"
@@ -115,7 +115,7 @@ class Pool(object):
 
         self._created_connections += 1
 
-        if self._current_master == None:
+        if self._current_master is None:
             logging.warning("No master set - reconfiguratin")
             self._configure()
 

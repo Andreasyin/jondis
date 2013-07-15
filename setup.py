@@ -1,11 +1,12 @@
 from setuptools import setup, find_packages
 import os
 
+
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name="jondis",
-      version="0.1.4",
+      version="0.1.5",
       description="Redis pool for HA redis clusters",
       long_description=read('README.md'),
       author="Jon Haddad",
@@ -20,7 +21,7 @@ setup(name="jondis",
           "Programming Language :: Python :: 2.7",
           "Topic :: Internet :: WWW/HTTP",
           "Topic :: Software Development :: Libraries :: Python Modules",
-          ],
+      ],
       keywords="redis",
       install_requires=["redis"],
       url="https://github.com/StartTheShift/jondis",
