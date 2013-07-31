@@ -44,7 +44,7 @@ class Pool(object):
             self._hosts.add(Server(host, int(port)))
 
         self.connection_kwargs['db'] = db or 0
-        self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 2
+        self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 1
         self._configure()
 
     def _configure(self):
