@@ -118,7 +118,9 @@ class Pool(object):
 
         if self._current_master is None:
             logging.warning("No master set - reconfiguratin")
-            self._configure()
+            self.__init__(self.connection_class, self.max_connections,
+                          self._origin_hosts, **self.connection_kwargs)
+            #self._configure()
 
         if not self._current_master:
             raise ConnectionError("Can't connect to a master")
