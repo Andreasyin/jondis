@@ -75,9 +75,13 @@ class Pool(object):
                     self._master_pool.add(conn)
                     slaves = filter(lambda x: x[0:5] == 'slave', info.keys())
                     slaves = [info[y] for y in slaves]
-                    slaves = [y.split(',') for y in slaves]
-                    slaves = filter(lambda x: x[2] == 'online', slaves)
-                    slaves = [Server(s[0], int(s[1])) for s in slaves]
+                    if info['redis_version'] >= '2.8':
+                        slaves = filter(lambda x: x['state'] == 'online', slaves)
+                        slaves = [Server(s['ip'], int(s['port'])) for s in slaves]
+                    else:
+                        slaves = [y.split(',') for y in slaves]
+                        slaves = filter(lambda x: x[2] == 'online', slaves)
+                        slaves = [Server(s[0], int(s[1])) for s in slaves]
 
                     for y in slaves:
                         if y not in self._hosts:
