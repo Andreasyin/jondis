@@ -2,6 +2,7 @@
 .idea/
 .noseids
 .env
+*.swp
 dist/
 dump.rdb
 jondis.egg-info/

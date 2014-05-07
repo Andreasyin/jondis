@@ -29,10 +29,14 @@ will be lifted soon with master discovery.
 
 ```python
 from jondis.pool import Pool
+from redis import Redis
 pool = Pool(hosts=["redis01:6379","redis02:6379"])
-redis = redis_lib.client.StrictRedis(connection_pool=pool)
+redis = Redis(connection_pool=pool)
 ```
+OR
 
-
-
-
+```python
+from jondis.client import create_client
+hosts = ["redis01:6379","redis02:6379"]
+redis = create_client(hosts)
+```

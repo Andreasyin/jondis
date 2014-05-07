@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 from Queue import Queue
-from itertools import chain
 import os
 from redis import ConnectionError
 from redis.connection import Connection
