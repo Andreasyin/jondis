@@ -28,20 +28,20 @@ class Manager(object):
         self.procs[name] = (proc, port)
         port += 1
         # ghetto hack but necessary to find the right slaves
-        sleep(.5)
+        sleep(1)
         return self.procs[name][1]
 
     def stop(self, name):
         (proc, port) = self.procs[name]
         proc.terminate()
         # same hack as above to make sure failure actually happens
-        sleep(.1)
+        sleep(1)
 
     def promote(self, port):
         admin_conn = redis.StrictRedis('localhost', port)
         logger.debug("Promoting {}".format(port))
         admin_conn.slaveof()  # makes it the master
-        sleep(.1)
+        sleep(1)
 
     def shutdown(self):
         for (proc, port) in self.procs.itervalues():
