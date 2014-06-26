@@ -1,35 +1,38 @@
 # -*- coding: utf-8 -*-
-from Queue import Queue
-import os
-from redis import ConnectionError
-from redis.connection import Connection
-from redis.client import parse_info
-from collections import namedtuple
+
 import logging
+import os
 import socket
+from collections import namedtuple
+from Queue import Empty, Full, LifoQueue, Queue
+
+from redis import ConnectionError
+from redis.client import parse_info
+from redis.connection import Connection
 
 Server = namedtuple('Server', ['host', 'port'])
 
 
 class Pool(object):
+    """Thread-safe Redis connection pool
 
-    def __init__(self, connection_class=Connection,
-                 max_connections=None, hosts=[],
+    :param max_connections: max connections in connection pool
+    :param timeout: seconds to wait for connection to become available
+    """
+
+    def __init__(self, connection_class=Connection, max_connections=50,
+                 timeout=20, queue_class=LifoQueue, hosts=[],
                  **connection_kwargs):
-
         self.pid = os.getpid()
         self.connection_class = connection_class
         self.connection_kwargs = connection_kwargs
         self.max_connections = max_connections or 2 ** 31
+        self.timeout = timeout
+        self.queue_class = queue_class
         self._origin_hosts = hosts
-        self._in_use_connections = set()
 
         self._hosts = set()  # current active known hosts
-        self._current_master = None  # (host,port)
-
-        self._master_pool = set()
-        self._slave_pool = set()
-        self._created_connections = 0
+        self._connections = []
 
         db = self.connection_kwargs.get('db')
         for x in hosts:
@@ -44,15 +47,25 @@ class Pool(object):
             self._hosts.add(Server(host, int(port)))
 
         self.connection_kwargs['db'] = db or 0
-        self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 1
+        self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 1  # noqa
+
         self._configure()
 
+    def __repr__(self):
+        return "{}<hosts={},master={}>".format(type(self).__name__,
+                                               self._hosts,
+                                               self._current_master)
+
     def _configure(self):
-        """
-        given the servers we know about, find the current master
-        once we have the master, find all the slaves
+        """Given the servers we know about, find the current master
+        once we have the master, find all the slaves.
         """
         logging.debug("Running configure")
+
+        self._current_master = None  # (host, port)
+        self._master_pool = self.queue_class(self.max_connections)
+        self._slave_pool = set()
+
         to_check = Queue()
         for x in self._hosts:
             to_check.put(x)
@@ -72,12 +85,14 @@ class Pool(object):
                     self._current_master = x
                     logging.debug("Current master {}:{}".format(
                         x.host, x.port))
-                    self._master_pool.add(conn)
+                    self._master_pool.put_nowait(conn)
                     slaves = filter(lambda x: x[0:5] == 'slave', info.keys())
                     slaves = [info[y] for y in slaves]
                     if info['redis_version'] >= '2.8':
-                        slaves = filter(lambda x: x['state'] == 'online', slaves)
-                        slaves = [Server(s['ip'], int(s['port'])) for s in slaves]
+                        slaves = filter(lambda x: x['state'] == 'online',
+                                        slaves)
+                        slaves = [Server(s['ip'], int(s['port']))
+                                  for s in slaves]
                     else:
                         slaves = [y.split(',') for y in slaves]
                         slaves = filter(lambda x: x[2] == 'online', slaves)
@@ -87,11 +102,21 @@ class Pool(object):
                         if y not in self._hosts:
                             self._hosts.add(y)
                             to_check.put(y)
+            except ConnectionError:
+                logging.exception("Can't connect to: "
+                                  "{host}:{port}/{db}, remove from "
+                                  "hosts".format(
+                                      host=x.host, port=x.port,
+                                      db=self.connection_kwargs.get('db')))
+                self._hosts.remove(x)
 
-                    # add the slaves
-            except:
-                # remove from list
-                logging.error("Can't connect to: {host}:{port}/{db}".format(host=x.host, port=x.port, db=self.connection_kwargs.get('db')), exc_info=1)
+        # Fill master connection pool with ``None``
+        while True:
+            try:
+                self._master_pool.put_nowait(None)
+            except Full:
+                break
+
         logging.debug("Configure complete, host list: {}".format(self._hosts))
 
     def _checkpid(self):
@@ -101,30 +126,43 @@ class Pool(object):
                           self._origin_hosts, **self.connection_kwargs)
 
     def get_connection(self, command_name, *keys, **options):
-        "Get a connection from the pool"
+        """Get a connection, blocking for ``self.timeout`` until a connection
+        is available from the pool.
+
+        If the connection returned is ``None`` then creates a new connection.
+        Because we use a last-in first-out queue, the existing connections
+        (having been returned to the pool after the initial ``None`` values
+        were added) will be returned before ``None`` values. This means we only
+        create new connections when we need to, i.e.: the actual number of
+        connections will only increase in response to demand.
+        """
         self._checkpid()
+
+        # Try and get a connection from the pool. If one isn't available within
+        # self.timeout then raise a `ConnectionError`.
+        connection = None
         try:
-            connection = self._master_pool.pop()
-            logging.debug("Using connection from pool")
-        except KeyError:
+            connection = self._master_pool.get(block=True,
+                                               timeout=self.timeout)
+            logging.debug("Using connection from pool: %r", connection)
+        except Empty:
+            raise ConnectionError("No connection available")
+
+        # If the ``connection`` is actually ``None`` then that's a cue to make
+        # a new connection to add to the pool.
+        if connection is None:
             logging.debug("Creating new connection")
             connection = self.make_connection()
 
-        self._in_use_connections.add(connection)
         return connection
 
     def make_connection(self):
-        "Create a new connection"
-        if self._created_connections >= self.max_connections:
-            raise ConnectionError("Too many connections")
-
-        self._created_connections += 1
-
+        """Create a new connection"""
         if self._current_master is None:
-            logging.warning("No master set - reconfiguratin")
+            logging.warning("No master set - reconfiguration")
             self.__init__(self.connection_class, self.max_connections,
                           self._origin_hosts, **self.connection_kwargs)
-            #self._configure()
+            # self._configure()
 
         if not self._current_master:
             raise ConnectionError("Can't connect to a master")
@@ -133,33 +171,35 @@ class Pool(object):
         port = self._current_master[1]
 
         logging.info("Creating new connection to {}:{}".format(host, port))
-        return self.connection_class(host=host, port=port, **self.connection_kwargs)
+        connection = self.connection_class(host=host, port=port,
+                                           **self.connection_kwargs)
+        self._connections.append(connection)
+        return connection
 
     def release(self, connection):
-
+        """Releases the connection back to the pool. If the connection is dead,
+        we disconnect all.
         """
-        Releases the connection back to the pool
-        if the connection is dead, we disconnect all
-        """
-
         if connection._sock is None:
             logging.warning("Dead socket, reconfigure")
             self.disconnect()
             self._configure()
-            self._current_master = None
-            server = Server(connection.host, int(connection.port))
-            self._hosts.remove(server)
-            logging.debug("New configuration: {}".format(self._hosts))
-
             return
 
         self._checkpid()
-        if connection.pid == self.pid:
-            self._in_use_connections.remove(connection)
-            self._master_pool.add(connection)
+        if connection.pid != self.pid:
+            logging.debug("Not same procuess: %d != %d", connection.pid,
+                          self.pid)
+            return
+
+        try:
+            self._master_pool.put_nowait(connection)
+            logging.debug("Put back connection: %r", connection)
+        except Full:
+            logging.debug("Master pool is full")
+            pass
 
     def disconnect(self):
-        "Disconnects all connections in the pool"
-        self._master_pool = set()
-        self._slave_pool = set()
-        self._in_use_connections = set()
+        """Disconnects all connections in the pool"""
+        for connection in self._connections:
+            connection.disconnect()
