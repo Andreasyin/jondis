@@ -2,6 +2,8 @@
 
 Jondis is a high availability pool management class for the excellent https://github.com/andymccurdy/redis-py
 
+[![Build Status](https://travis-ci.org/xiaogaozi/jondis.svg)](https://travis-ci.org/xiaogaozi/jondis)
+
 
 ## Features
 
