@@ -44,18 +44,12 @@ class Manager(object):
     def stop(self, name):
         proc, port = self.procs[name]
         if CURRENT_USER == 'travis':
-            logging.debug(
-                subprocess.check_output('ps axu | grep redis-server',
-                                        shell=True))
             pid = proc.pid
-            logging.debug('Kill process #{0}'.format(pid))
+            logging.debug('Kill process #{0} and #{1}'.format(pid, pid + 1))
             # some hack to kill child process
             subprocess.call("sudo kill {parent} {child}".format(parent=pid,
                                                                 child=pid + 1),
                             shell=True)
-            logging.debug(
-                subprocess.check_output('ps axu | grep redis-server',
-                                        shell=True))
         else:
             proc.terminate()
         # same hack as above to make sure failure actually happens
