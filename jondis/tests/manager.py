@@ -1,58 +1,69 @@
-
-import subprocess
-import os
-
-# im picking an arbitarily high port
-# starting point, going up from here
-from time import sleep
-import redis
+import getpass
 import logging
+import os
+import subprocess
+from time import sleep
+
+import redis
 
 logger = logging.getLogger(__name__)
-
 port = 25530
-DEVNULL=open(os.devnull, 'wb')
+DEVNULL = open(os.devnull, 'wb')
+CURRENT_USER = getpass.getuser()
+
+if CURRENT_USER == 'travis':
+    SLEEP_TIME = 3
+else:
+    SLEEP_TIME = .5
+
 
 class Manager(object):
+
     def __init__(self):
         # procs is a dict of tuples (proc, port)
         self.procs = {}
 
     def start(self, name, master=None):
-        """
-        :type master int
-        """
         global port
-        slave_of = "--slaveof 127.0.0.1 {}".format(master) if master else ""
+        slave_of = "--slaveof 127.0.0.1 {0}".format(master) if master else ""
+        if CURRENT_USER == 'travis':
+            start_command = "sudo redis-server --port {0} {1}".format(port,
+                                                                      slave_of)
+        else:
+            start_command = "redis-server --port {0} {1}".format(port,
+                                                                 slave_of)
 
-        start_command = "redis-server --port {} {}".format(port, slave_of)
-
-        proc = subprocess.Popen(start_command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
-
+        proc = subprocess.Popen(start_command, shell=True, stdout=DEVNULL,
+                                stderr=DEVNULL)
         self.procs[name] = (proc, port)
         port += 1
         # ghetto hack but necessary to find the right slaves
-        sleep(.1)
+        sleep(SLEEP_TIME)
         return self.procs[name][1]
 
     def stop(self, name):
-        (proc, port) = self.procs[name]
-        proc.terminate()
+        proc, port = self.procs[name]
+        if CURRENT_USER == 'travis':
+            pid = proc.pid
+            logging.debug('Kill process #{0} and #{1}'.format(pid, pid + 1))
+            # some hack to kill child process
+            subprocess.call("sudo kill {parent} {child}".format(parent=pid,
+                                                                child=pid + 1),
+                            shell=True)
+        else:
+            proc.terminate()
         # same hack as above to make sure failure actually happens
-        sleep(.1)
+        sleep(SLEEP_TIME)
 
     def promote(self, port):
         admin_conn = redis.StrictRedis('localhost', port)
-        logger.debug("Promoting {}".format(port))
-        admin_conn.slaveof() # makes it the master
-        sleep(.1)
+        logger.debug("Promoting {0}".format(port))
+        admin_conn.slaveof()  # makes it the master
+        sleep(SLEEP_TIME)
 
     def shutdown(self):
-        for (proc,port) in self.procs.itervalues():
+        for (proc, port) in self.procs.itervalues():
             proc.terminate()
 
     def __getitem__(self, item):
         return self.procs[item]
-
-
-

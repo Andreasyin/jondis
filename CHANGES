@@ -1,0 +1,7 @@
+Changelog
+=========
+
+Version 0.1.10
+--------------
+
+- Make connection pool thread-safe
