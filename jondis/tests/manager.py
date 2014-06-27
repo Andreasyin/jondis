@@ -1,7 +1,6 @@
 import getpass
 import logging
 import os
-import signal
 import subprocess
 from time import sleep
 
@@ -48,8 +47,12 @@ class Manager(object):
             logging.debug(
                 subprocess.check_output('ps axu | grep redis-server',
                                         shell=True))
-            logging.debug('Kill process #{0}'.format(proc.pid))
-            os.killpg(proc.pid, signal.SIGTERM)
+            pid = proc.pid
+            logging.debug('Kill process #{0}'.format(pid))
+            # some hack to kill child process
+            subprocess.call("sudo kill {parent} {child}".format(parent=pid,
+                                                                child=pid + 1),
+                            shell=True)
             logging.debug(
                 subprocess.check_output('ps axu | grep redis-server',
                                         shell=True))
