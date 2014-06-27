@@ -1,3 +1,4 @@
+import getpass
 import logging
 import os
 import subprocess
@@ -19,29 +20,31 @@ class Manager(object):
     def start(self, name, master=None):
         global port
         slave_of = "--slaveof 127.0.0.1 {}".format(master) if master else ""
-
-        start_command = "redis-server --port {} {}".format(port, slave_of)
+        if getpass.getuser() == 'travis':
+            start_command = "sudo redis-server --port {} {}".format(port,
+                                                                    slave_of)
+        else:
+            start_command = "redis-server --port {} {}".format(port, slave_of)
 
         proc = subprocess.Popen(start_command, shell=True, stdout=DEVNULL,
                                 stderr=DEVNULL)
-
         self.procs[name] = (proc, port)
         port += 1
         # ghetto hack but necessary to find the right slaves
-        sleep(1)
+        sleep(.5)
         return self.procs[name][1]
 
     def stop(self, name):
         (proc, port) = self.procs[name]
         proc.terminate()
         # same hack as above to make sure failure actually happens
-        sleep(1)
+        sleep(.5)
 
     def promote(self, port):
         admin_conn = redis.StrictRedis('localhost', port)
         logger.debug("Promoting {}".format(port))
         admin_conn.slaveof()  # makes it the master
-        sleep(1)
+        sleep(.5)
 
     def shutdown(self):
         for (proc, port) in self.procs.itervalues():
