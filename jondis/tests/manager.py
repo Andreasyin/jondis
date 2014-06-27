@@ -9,8 +9,9 @@ import redis
 logger = logging.getLogger(__name__)
 port = 25530
 DEVNULL = open(os.devnull, 'wb')
+CURRENT_USER = getpass.getuser()
 
-if getpass.getuser() == 'travis':
+if CURRENT_USER == 'travis':
     SLEEP_TIME = 3
 else:
     SLEEP_TIME = .5
@@ -25,7 +26,7 @@ class Manager(object):
     def start(self, name, master=None):
         global port
         slave_of = "--slaveof 127.0.0.1 {0}".format(master) if master else ""
-        if getpass.getuser() == 'travis':
+        if CURRENT_USER == 'travis':
             start_command = "sudo redis-server --port {0} {1}".format(port,
                                                                       slave_of)
         else:
@@ -41,8 +42,11 @@ class Manager(object):
         return self.procs[name][1]
 
     def stop(self, name):
-        (proc, port) = self.procs[name]
-        proc.terminate()
+        proc, port = self.procs[name]
+        if CURRENT_USER == 'travis':
+            subprocess.call("sudo kill {0}".format(proc.pid), shell=True)
+        else:
+            proc.terminate()
         # same hack as above to make sure failure actually happens
         sleep(SLEEP_TIME)
 

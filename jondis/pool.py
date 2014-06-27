@@ -83,7 +83,7 @@ class Pool(object):
                     self._slave_pool.add(conn)
                 elif info['role'] == 'master':
                     self._current_master = x
-                    logging.debug("Current master {}:{}".format(
+                    logging.debug("Current master {0}:{1}".format(
                         x.host, x.port))
                     self._master_pool.put_nowait(conn)
                     slaves = filter(lambda x: x[0:5] == 'slave', info.keys())
@@ -117,7 +117,7 @@ class Pool(object):
             except Full:
                 break
 
-        logging.debug("Configure complete, host list: {}".format(self._hosts))
+        logging.debug("Configure complete, host list: {0}".format(self._hosts))
 
     def _checkpid(self):
         if self.pid != os.getpid():
@@ -151,7 +151,7 @@ class Pool(object):
         # If the ``connection`` is actually ``None`` then that's a cue to make
         # a new connection to add to the pool.
         if connection is None:
-            logging.debug("Creating new connection")
+            logging.debug("Create new connection")
             connection = self.make_connection()
 
         return connection
