@@ -45,11 +45,13 @@ class Manager(object):
         proc, port = self.procs[name]
         if CURRENT_USER == 'travis':
             logging.debug(
-                subprocess.check_output('ps axu | grep redis-server'))
+                subprocess.check_output('ps axu | grep redis-server',
+                                        shell=True))
             logging.debug('Kill process #{0}'.format(proc.pid))
             subprocess.call("sudo kill {0}".format(proc.pid), shell=True)
             logging.debug(
-                subprocess.check_output('ps axu | grep redis-server'))
+                subprocess.check_output('ps axu | grep redis-server',
+                                        shell=True))
         else:
             proc.terminate()
         # same hack as above to make sure failure actually happens
