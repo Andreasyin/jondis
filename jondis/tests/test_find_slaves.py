@@ -10,8 +10,8 @@ class BasicFindSlavesTest(BaseJondisTest):
 
     def test_update_hosts(self):
         """ensures the self.pool is aware of the slaves after updating"""
-        hosts = ['127.0.0.1:{}'.format(self.master),
-                 '127.0.0.1:{}'.format(self.slave)]
+        hosts = ['127.0.0.1:{0}'.format(self.master),
+                 '127.0.0.1:{0}'.format(self.slave)]
 
         pool = Pool(hosts=hosts)
 
@@ -27,8 +27,8 @@ class DiscoverSlavesTest(BaseJondisTest):
 
     def test_find_slave(self):
         # tests that we auto discover the 2nd slave
-        hosts = ['127.0.0.1:{}'.format(self.master),
-                 '127.0.0.1:{}'.format(self.slave)]
+        hosts = ['127.0.0.1:{0}'.format(self.master),
+                 '127.0.0.1:{0}'.format(self.slave)]
 
         pool = Pool(hosts=hosts)
 
@@ -43,7 +43,7 @@ class SlaveDiscovery2Test(BaseJondisTest):
         self.slave = self.manager.start('slave', self.master)
         self.slave2 = self.manager.start('slave2', self.master)
 
-        hosts = ['127.0.0.1:{}'.format(self.master)]
+        hosts = ['127.0.0.1:{0}'.format(self.master)]
 
         self.pool = Pool(hosts=hosts)
 

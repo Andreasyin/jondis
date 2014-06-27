@@ -18,7 +18,7 @@ class SlavePromotionTest(BaseJondisTest):
         assert self.slave > 0
 
     def test_promotion_on_failure(self):
-        pool = Pool(hosts=['127.0.0.1:{}'.format(self.master)])
+        pool = Pool(hosts=['127.0.0.1:{0}'.format(self.master)])
         r = redis.StrictRedis(connection_pool=pool)
 
         r.set('test', 1)

@@ -19,8 +19,8 @@ class ConnectionPoolTest(BaseJondisTest):
 
     def get_pool(self, connection_kwargs=None, max_connections=10,
                  timeout=20):
-        hosts = ['127.0.0.1:{}'.format(self.master),
-                 '127.0.0.1:{}'.format(self.slave)]
+        hosts = ['127.0.0.1:{0}'.format(self.master),
+                 '127.0.0.1:{0}'.format(self.slave)]
         connection_kwargs = connection_kwargs or {}
         pool = Pool(hosts=hosts,
                     max_connections=max_connections,

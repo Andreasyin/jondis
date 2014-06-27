@@ -52,9 +52,9 @@ class Pool(object):
         self._configure()
 
     def __repr__(self):
-        return "{}<hosts={},master={}>".format(type(self).__name__,
-                                               self._hosts,
-                                               self._current_master)
+        return "{0}<hosts={1},master={2}>".format(type(self).__name__,
+                                                  self._hosts,
+                                                  self._current_master)
 
     def _configure(self):
         """Given the servers we know about, find the current master
@@ -103,7 +103,7 @@ class Pool(object):
                             self._hosts.add(y)
                             to_check.put(y)
             except ConnectionError:
-                logging.exception("Can't connect to: "
+                logging.exception("Can't connect to "
                                   "{host}:{port}/{db}, remove from "
                                   "hosts".format(
                                       host=x.host, port=x.port,
@@ -170,7 +170,7 @@ class Pool(object):
         host = self._current_master[0]
         port = self._current_master[1]
 
-        logging.info("Creating new connection to {}:{}".format(host, port))
+        logging.info("Creating new connection to {0}:{1}".format(host, port))
         connection = self.connection_class(host=host, port=port,
                                            **self.connection_kwargs)
         self._connections.append(connection)
@@ -188,13 +188,13 @@ class Pool(object):
 
         self._checkpid()
         if connection.pid != self.pid:
-            logging.debug("Not same procuess: %d != %d", connection.pid,
-                          self.pid)
+            logging.debug("Not same procuess: {0} != {1}".format(
+                connection.pid, self.pid))
             return
 
         try:
             self._master_pool.put_nowait(connection)
-            logging.debug("Put back connection: %r", connection)
+            logging.debug("Put back connection: {0}".format(connection))
         except Full:
             logging.debug("Master pool is full")
             pass
