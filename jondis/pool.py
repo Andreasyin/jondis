@@ -122,8 +122,10 @@ class Pool(object):
     def _checkpid(self):
         if self.pid != os.getpid():
             self.disconnect()
-            self.__init__(self.connection_class, self.max_connections,
-                          self._origin_hosts, **self.connection_kwargs)
+            self.__init__(connection_class=self.connection_class,
+                          max_connections=self.max_connections,
+                          timeout=self.timeout,
+                          hosts=self._origin_hosts, **self.connection_kwargs)
 
     def get_connection(self, command_name, *keys, **options):
         """Get a connection, blocking for ``self.timeout`` until a connection
@@ -160,9 +162,10 @@ class Pool(object):
         """Create a new connection"""
         if self._current_master is None:
             logging.warning("No master set - reconfiguration")
-            self.__init__(self.connection_class, self.max_connections,
-                          self._origin_hosts, **self.connection_kwargs)
-            # self._configure()
+            self.__init__(connection_class=self.connection_class,
+                          max_connections=self.max_connections,
+                          timeout=self.timeout,
+                          hosts=self._origin_hosts, **self.connection_kwargs)
 
         if not self._current_master:
             raise ConnectionError("Can't connect to a master")
