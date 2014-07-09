@@ -3,6 +3,8 @@
 import time
 from threading import Thread
 
+import gevent
+import redis
 from nose.tools import assert_raises, eq_
 from redis import Connection
 from redis import ConnectionError
@@ -77,9 +79,48 @@ class ConnectionPoolTest(BaseJondisTest):
 
     def test_repr(self):
         pool = self.get_pool()
-        expected = ("Pool<hosts=set([Server(host='127.0.0.1', "
-                    "port={slave}), Server(host='127.0.0.1', "
-                    "port={master})]),master=Server(host='127.0.0.1', "
-                    "port={master})>".format(slave=self.slave,
-                                             master=self.master))
-        eq_(repr(pool), expected)
+        expected1 = ("Pool<hosts=set([Server(host='127.0.0.1', "
+                     "port={slave}), Server(host='127.0.0.1', "
+                     "port={master})]),master=Server(host='127.0.0.1', "
+                     "port={master})>".format(slave=self.slave,
+                                              master=self.master))
+        expected2 = ("Pool<hosts=set([Server(host='127.0.0.1', "
+                     "port={master}), Server(host='127.0.0.1', "
+                     "port={slave})]),master=Server(host='127.0.0.1', "
+                     "port={master})>".format(slave=self.slave,
+                                              master=self.master))
+        assert repr(pool) == expected1 or repr(pool) == expected2
+
+    def test_multithreading(self):
+        pool = self.get_pool(max_connections=100)
+        r = redis.StrictRedis(connection_pool=pool)
+
+        def foo(i):
+            key = 'test{}'.format(i)
+            r.set(key, i)
+            eq_(r.get(key), i)
+
+        threads = [Thread(target=foo, args=(str(i),)) for i in xrange(200)]
+        [thread.start() for thread in threads]
+        [thread.join() for thread in threads]
+
+    def test_greenlets(self):
+
+        class DummyClient(redis.StrictRedis):
+            """Don't want to patch any module, so define this DummyClient."""
+            def execute_command(self, *args):
+                command_name = args[0]
+                if command_name in ['GET', 'SET']:
+                    return args[1]
+                return super(DummyClient, self).execute_command(*args)
+
+        pool = self.get_pool(max_connections=100)
+        r = DummyClient(connection_pool=pool)
+
+        def foo(i):
+            key = i
+            r.set(key, i)
+            eq_(r.get(key), i)
+
+        jobs = [gevent.spawn(foo, str(i)) for i in xrange(200)]
+        gevent.joinall(jobs, raise_error=True)
