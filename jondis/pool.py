@@ -13,6 +13,7 @@ Server = namedtuple('Server', ['host', 'port'])
 
 
 class Pool(object):
+
     """Thread-safe Redis connection pool
 
     :param max_connections: max connections in connection pool
@@ -20,7 +21,7 @@ class Pool(object):
     """
 
     def __init__(self, connection_class=Connection, max_connections=50,
-                 timeout=20, queue_class=LifoQueue, hosts=[],
+                 timeout=20, queue_class=LifoQueue, hosts=None,
                  **connection_kwargs):
         self.pid = os.getpid()
         self.connection_class = connection_class
@@ -28,11 +29,8 @@ class Pool(object):
         self.max_connections = max_connections or 2 ** 31
         self.timeout = timeout
         self.queue_class = queue_class
-        self._origin_hosts = hosts
-
+        self._origin_hosts = hosts or []
         self._hosts = set()  # current active known hosts
-        self._connections = []
-
         db = self.connection_kwargs.get('db')
         for x in self._origin_hosts:
             if ":" in x:
@@ -44,6 +42,7 @@ class Pool(object):
                 port = 6379
             self._hosts.add(Server(host, int(port)))
         self.connection_kwargs['db'] = db or 0
+
         self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 1  # noqa
 
         self._configure()
@@ -53,10 +52,18 @@ class Pool(object):
                                                   self._hosts,
                                                   self._current_master)
 
+    def _reconfigure(self):
+        self.disconnect()
+        self.__init__(connection_class=self.connection_class,
+                      max_connections=self.max_connections,
+                      timeout=self.timeout,
+                      hosts=self._origin_hosts, **self.connection_kwargs)
+
     def _configure(self):
         """Given the servers we know about, find the current master
         once we have the master, find all the slaves.
         """
+        self._connections = []
         logging.debug("Running configure")
 
         self._current_master = None  # (host, port)
@@ -105,7 +112,7 @@ class Pool(object):
                                   "hosts".format(
                                       host=x.host, port=x.port,
                                       db=self.connection_kwargs.get('db')))
-                self._hosts.remove(x)
+                self._hosts.discard(x)
 
         # Fill master connection pool with ``None``
         while True:
@@ -118,11 +125,7 @@ class Pool(object):
 
     def _checkpid(self):
         if self.pid != os.getpid():
-            self.disconnect()
-            self.__init__(connection_class=self.connection_class,
-                          max_connections=self.max_connections,
-                          timeout=self.timeout,
-                          hosts=self._origin_hosts, **self.connection_kwargs)
+            self._reconfigure()
 
     def get_connection(self, command_name, *keys, **options):
         """Get a connection, blocking for ``self.timeout`` until a connection
@@ -160,8 +163,7 @@ class Pool(object):
         """Create a new connection"""
         if self._current_master is None:
             logging.warning("No master set - reconfiguration")
-            self.disconnect()
-            self._configure()
+            self._reconfigure()
 
         if not self._current_master:
             raise ConnectionError("Can't connect to a master")
