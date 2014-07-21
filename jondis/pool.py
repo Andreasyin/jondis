@@ -2,7 +2,6 @@
 
 import logging
 import os
-import socket
 from collections import namedtuple
 from Queue import Empty, Full, LifoQueue, Queue
 
@@ -31,7 +30,20 @@ class Pool(object):
         self.queue_class = queue_class
         self._origin_hosts = hosts
 
+        self._hosts = set()  # current active known hosts
         self._connections = []
+
+        db = self.connection_kwargs.get('db')
+        for x in self._origin_hosts:
+            if ":" in x:
+                (host, port) = x.split(":")
+                if "/" in port:
+                    port, db = port.split("/")
+            else:
+                host = x
+                port = 6379
+            self._hosts.add(Server(host, int(port)))
+        self.connection_kwargs['db'] = db or 0
         self.connection_kwargs['socket_timeout'] = self.connection_kwargs.get('socket_timeout') or 1  # noqa
 
         self._configure()
@@ -46,20 +58,6 @@ class Pool(object):
         once we have the master, find all the slaves.
         """
         logging.debug("Running configure")
-
-        self._hosts = set()  # current active known hosts
-        db = self.connection_kwargs.get('db')
-        for x in self._origin_hosts:
-            if ":" in x:
-                (host, port) = x.split(":")
-                if "/" in port:
-                    port, db = port.split("/")
-            else:
-                host = x
-                port = 6379
-            host = socket.gethostbyname(host)
-            self._hosts.add(Server(host, int(port)))
-        self.connection_kwargs['db'] = db or 0
 
         self._current_master = None  # (host, port)
         self._master_pool = self.queue_class(self.max_connections)
@@ -162,6 +160,7 @@ class Pool(object):
         """Create a new connection"""
         if self._current_master is None:
             logging.warning("No master set - reconfiguration")
+            self.disconnect()
             self._configure()
 
         if not self._current_master:
