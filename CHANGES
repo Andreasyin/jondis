@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Version 0.1.12
+--------------
+
+- Fixes bug: resolve connection pool is empty
+
 Version 0.1.11
 --------------
 

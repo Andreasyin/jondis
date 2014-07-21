@@ -7,7 +7,7 @@ def read(fname):
 
 setup(
     name="jondis",
-    version="0.1.11",
+    version="0.1.12",
     description="Redis pool for HA Redis clusters",
     long_description=read('README.md'),
     author="Jon Haddad",
