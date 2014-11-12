@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 from collections import namedtuple
 from Queue import Empty, Full, LifoQueue, Queue
 
@@ -31,6 +32,7 @@ class Pool(object):
         self.queue_class = queue_class
         self._origin_hosts = hosts or []
         self._hosts = set()  # current active known hosts
+        self._lock = threading.RLock()
         db = self.connection_kwargs.get('db')
         for x in self._origin_hosts:
             if ":" in x:
@@ -70,56 +72,58 @@ class Pool(object):
         self._master_pool = self.queue_class(self.max_connections)
         self._slave_pool = set()
 
-        to_check = Queue()
-        for x in self._hosts:
-            to_check.put(x)
+        with self._lock:
+            to_check = Queue()
+            for x in self._hosts:
+                to_check.put(x)
 
-        while not to_check.empty():
-            x = to_check.get()
+            while not to_check.empty():
+                x = to_check.get()
 
-            try:
-                conn = self.connection_class(
-                    host=x.host, port=x.port, **self.connection_kwargs)
-                conn.send_command("INFO")
-                info = parse_info(conn.read_response())
+                try:
+                    conn = self.connection_class(
+                        host=x.host, port=x.port, **self.connection_kwargs)
+                    conn.send_command("INFO")
+                    info = parse_info(conn.read_response())
 
-                if info['role'] == 'slave':
-                    self._slave_pool.add(conn)
-                elif info['role'] == 'master':
-                    self._current_master = x
-                    logging.debug("Current master {0}:{1}".format(
-                        x.host, x.port))
-                    self._master_pool.put_nowait(conn)
-                    slaves = filter(lambda x: x[0:5] == 'slave', info.keys())
-                    slaves = [info[y] for y in slaves]
-                    if info['redis_version'] >= '2.8':
-                        slaves = filter(lambda x: x['state'] == 'online',
-                                        slaves)
-                        slaves = [Server(s['ip'], int(s['port']))
-                                  for s in slaves]
-                    else:
-                        slaves = [y.split(',') for y in slaves]
-                        slaves = filter(lambda x: x[2] == 'online', slaves)
-                        slaves = [Server(s[0], int(s[1])) for s in slaves]
+                    if info['role'] == 'slave':
+                        self._slave_pool.add(conn)
+                    elif info['role'] == 'master':
+                        self._current_master = x
+                        logging.debug("Current master {0}:{1}".format(
+                            x.host, x.port))
+                        self._master_pool.put_nowait(conn)
+                        slaves = filter(
+                            lambda x: x[0:5] == 'slave', info.keys())
+                        slaves = [info[y] for y in slaves]
+                        if info['redis_version'] >= '2.8':
+                            slaves = filter(lambda x: x['state'] == 'online',
+                                            slaves)
+                            slaves = [Server(s['ip'], int(s['port']))
+                                      for s in slaves]
+                        else:
+                            slaves = [y.split(',') for y in slaves]
+                            slaves = filter(lambda x: x[2] == 'online', slaves)
+                            slaves = [Server(s[0], int(s[1])) for s in slaves]
 
-                    for y in slaves:
-                        if y not in self._hosts:
-                            self._hosts.add(y)
-                            to_check.put(y)
-            except ConnectionError:
-                logging.exception("Can't connect to "
-                                  "{host}:{port}/{db}, remove from "
-                                  "hosts".format(
-                                      host=x.host, port=x.port,
-                                      db=self.connection_kwargs.get('db')))
-                self._hosts.discard(x)
+                        for y in slaves:
+                            if y not in self._hosts:
+                                self._hosts.add(y)
+                                to_check.put(y)
+                except ConnectionError:
+                    logging.exception("Can't connect to "
+                                      "{host}:{port}/{db}, remove from "
+                                      "hosts".format(
+                                          host=x.host, port=x.port,
+                                          db=self.connection_kwargs.get('db')))
+                    self._hosts.discard(x)
 
-        # Fill master connection pool with ``None``
-        while True:
-            try:
-                self._master_pool.put_nowait(None)
-            except Full:
-                break
+            # Fill master connection pool with ``None``
+            while True:
+                try:
+                    self._master_pool.put_nowait(None)
+                except Full:
+                    break
 
         logging.debug("Configure complete, host list: {0}".format(self._hosts))
 

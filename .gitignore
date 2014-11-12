@@ -7,3 +7,4 @@ dist/
 dump.rdb
 jondis.egg-info/
 *.rdb
+.tox/
